@@ -2536,7 +2536,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
+            // Windows-Autostart startet SnipDrop mit diesem Flag, damit der
+            // Boot-Start lautlos im Tray bleibt. Ein manueller Start (Doppelklick,
+            // Installer-"Run SnipDrop") hat das Flag NICHT und zeigt darum ein
+            // Fenster — sonst landet der Nutzer im unsichtbaren Tray (siehe setup()).
+            Some(vec!["--minimized"]),
         ))
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_dialog::init())
@@ -2706,6 +2710,16 @@ pub fn run() {
                     let _ = welcome.show();
                     let _ = welcome.set_focus();
                 }
+            }
+
+            // Beim allerersten Start zeigt das Welcome-Fenster (oben). Ist der Nutzer
+            // bereits eingefuehrt, soll trotzdem das Hauptfenster aufgehen, wenn er
+            // SnipDrop MANUELL gestartet hat (Doppelklick / Installer-"Run SnipDrop") —
+            // sonst verschwindet die App kommentarlos ins Tray und viele finden sie
+            // dort nie. Nur der Windows-Autostart (mit --minimized) bleibt lautlos.
+            let autostart_launch = std::env::args().any(|arg| arg == "--minimized");
+            if !needs_onboarding && !autostart_launch {
+                show_main_window(&handle);
             }
 
             Ok(())
