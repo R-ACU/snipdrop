@@ -2534,6 +2534,25 @@ fn set_hotkey_status(app: &tauri::AppHandle, ok: bool, message: impl Into<String
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // MUSS als erstes Plugin registriert werden: faengt jeden weiteren Start ab,
+        // bevor eine zweite snipdrop.exe ein eigenes Fenster/Tray aufbaut. Statt einer
+        // neuen Instanz holt der Callback in der LAUFENDEN App das Fenster nach vorne.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            let needs_onboarding = app
+                .state::<AppState>()
+                .settings
+                .lock()
+                .map(|settings| !settings.onboarded)
+                .unwrap_or(false);
+            if needs_onboarding {
+                if let Some(welcome) = app.get_webview_window("welcome") {
+                    let _ = welcome.show();
+                    let _ = welcome.set_focus();
+                }
+            } else {
+                show_main_window(app);
+            }
+        }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             // Windows-Autostart startet SnipDrop mit diesem Flag, damit der
