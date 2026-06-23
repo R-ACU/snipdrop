@@ -1,0 +1,111 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SnipDrop",
+  "version": "0.1.0",
+  "identifier": "com.remo.snipdrop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1421",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "SnipDrop",
+        "width": 820,
+        "height": 560,
+        "minWidth": 680,
+        "minHeight": 460,
+        "resizable": true,
+        "decorations": false,
+        "fullscreen": false,
+        "center": true,
+        "visible": false
+      },
+      {
+        "label": "thumbnail",
+        "title": "SnipDrop Thumbnail",
+        "width": 520,
+        "height": 380,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "dragDropEnabled": false,
+        "focus": false,
+        "focusable": false,
+        "visible": false
+      },
+      {
+        "label": "editor",
+        "title": "SnipDrop Editor",
+        "width": 720,
+        "height": 520,
+        "minWidth": 420,
+        "minHeight": 320,
+        "resizable": true,
+        "center": true,
+        "visible": false
+      },
+      {
+        "label": "welcome",
+        "title": "Willkommen bei SnipDrop",
+        "width": 660,
+        "height": 660,
+        "resizable": false,
+        "maximizable": false,
+        "decorations": false,
+        "center": true,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://api.web3forms.com;",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$PICTURE/SnipDrop/**", "$TEMP/snipdrop-remote/**"]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/R-ACU/snipdrop/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZDQ0U1RDA3NTM1QkNGQUEKUldTcXoxdFRCMTNPL0JPKzhPbHlMZ09zN0xOVnZOcFMyOWVhbXlKRVZxRG5zeEVDK1pJd2cwSmoK"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": ["nsis", "msi"],
+    "publisher": "Remo",
+    "category": "Utility",
+    "copyright": "Copyright (c) 2026 Remo",
+    "shortDescription": "Context-aware screenshot paste for Windows.",
+    "longDescription": "SnipDrop captures Windows screenshots and makes the same result work as an image paste, file drop or terminal-friendly path.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "installMode": "currentUser",
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "languages": ["German", "English"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

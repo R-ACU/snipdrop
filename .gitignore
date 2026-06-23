@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Frontend-Build
+dist/
+*.tsbuildinfo
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/
+
+# Signaturschluessel — NIE committen (gehoeren in GitHub-Secrets)
+*.key
+*.key.pub
+.tauri/
+
+# Interne Docs — bleiben LOKAL, gehoeren nicht ins oeffentliche Repo
+# (Agenten-Anweisungen, Roadmap, Markt-/Strategie-Notizen).
+AGENTS.md
+CLAUDE.md
+TODO.md
+MARKET.md
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

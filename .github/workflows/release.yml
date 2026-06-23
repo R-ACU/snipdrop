@@ -1,0 +1,87 @@
+name: Release
+
+# Baut SnipDrop fuer Windows, signiert das Update-Paket und veroeffentlicht ein
+# GitHub-Release inkl. latest.json. Ausgeloest durch einen Versions-Tag, z. B.:
+#
+#   git tag -a v0.2.0 -m "Was ist neu:
+#   - Drag funktioniert jetzt auch in Slack
+#   - Editor: Pfeil-Werkzeug"
+#   git push origin v0.2.0
+#
+# Die Tag-Nachricht (alles nach der ersten Zeile) wird zu den Release-Notes und
+# damit zu dem Text, den der Update-Button in der App unter "Was ist neu" zeigt.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Release-Notes aus der Tag-Nachricht lesen
+        id: notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Die Annotation eines Tags wird serverseitig gespeichert; ueber die
+          # GitHub-API kommen wir zuverlaessig dran (lokales git im Runner sieht
+          # das annotierte Tag-Objekt nicht immer -> dann stuende die falsche
+          # Commit-Message in den Notes). Ablauf: Tag-Ref -> Objekt-Typ; bei
+          # einem annotierten Tag die Nachricht aus dem Tag-Objekt holen.
+          TAG="${GITHUB_REF_NAME}"
+          TYPE=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.type')
+          SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha')
+          if [ "$TYPE" = "tag" ]; then
+            MSG=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${SHA}" --jq '.message')
+          else
+            MSG=$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${SHA}" --jq '.message')
+          fi
+          # Erste Zeile (Betreff, z. B. "SnipDrop v0.2.0") weg -> nur der Body
+          # wird zur Release-Notiz; fuehrende Leerzeilen entfernen.
+          NOTES=$(printf '%s\n' "$MSG" | tail -n +2 | sed '/./,$!d')
+          if [ -z "$NOTES" ]; then
+            NOTES="$MSG"
+          fi
+          {
+            echo "body<<SNIPDROP_EOF"
+            echo "$NOTES"
+            echo "SNIPDROP_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Frontend-Abhaengigkeiten installieren
+        run: npm ci
+
+      - name: Rust-Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust-Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Bauen, signieren, Release veroeffentlichen
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "SnipDrop ${{ github.ref_name }}"
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: false
+          prerelease: false

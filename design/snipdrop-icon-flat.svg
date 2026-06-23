@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="SnipDrop">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3F46F2"/>
+      <stop offset="1" stop-color="#6EA3F2"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="18" y="18" width="220" height="220" rx="52" fill="url(#bg)"/>
+
+  <!-- image card -->
+  <rect x="56" y="46" width="144" height="94" rx="16" fill="#F1F1F3"/>
+  <circle cx="92" cy="78" r="13" fill="#2FB3E8"/>
+  <path d="M70 126 L102 88 L122 110 L150 76 L186 124" fill="none" stroke="#34A968" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- terminal prompt >_ -->
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M62 166 L84 184 L62 202" stroke-width="13"/>
+    <path d="M100 202 H162" stroke-width="13"/>
+  </g>
+</svg>
