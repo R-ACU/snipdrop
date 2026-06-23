@@ -6,7 +6,10 @@ use std::{
     hash::{Hash, Hasher},
     io::BufWriter,
     path::PathBuf,
-    sync::{mpsc, Mutex, OnceLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Mutex, OnceLock,
+    },
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -92,6 +95,11 @@ impl Default for HotkeyConfig {
 #[serde(rename_all = "camelCase")]
 struct AppSettings {
     thumbnail_dismiss: String,
+    // Groesse des Eck-Thumbnails in Prozent (100 = Standard). Skaliert die logische
+    // Fenstergroesse, damit jeder das Vorschaubild kleiner/groesser stellen kann.
+    // serde-default, damit aeltere settings.json (ohne Feld) weiter laden.
+    #[serde(default = "default_thumbnail_scale")]
+    thumbnail_scale: u32,
     // Farbe der gestrichelten Auswahl-Umrandung beim Snip, als "#rrggbb".
     // serde-default, damit aeltere settings.json (ohne Feld) weiter laden.
     #[serde(default = "default_selection_color")]
@@ -144,6 +152,19 @@ fn default_selection_color() -> String {
     "#ffffff".to_string()
 }
 
+fn default_thumbnail_scale() -> u32 {
+    60
+}
+
+// Erlaubter Bereich fuer die Thumbnail-Groesse (Prozent). Bewusst grosszuegig nach
+// oben, damit das Vorschaubild auch deutlich groesser gestellt werden kann.
+const THUMBNAIL_SCALE_MIN: u32 = 50;
+const THUMBNAIL_SCALE_MAX: u32 = 200;
+
+fn clamp_thumbnail_scale(value: u32) -> u32 {
+    value.clamp(THUMBNAIL_SCALE_MIN, THUMBNAIL_SCALE_MAX)
+}
+
 fn default_theme() -> String {
     "light".to_string()
 }
@@ -157,6 +178,7 @@ impl Default for AppSettings {
         // "paste" bildet das bisherige Verhalten ab (Ausblenden beim Einfügen).
         AppSettings {
             thumbnail_dismiss: "paste".to_string(),
+            thumbnail_scale: default_thumbnail_scale(),
             selection_color: default_selection_color(),
             ssh_host: String::new(),
             ssh_remote_dir: default_ssh_remote_dir(),
@@ -187,6 +209,11 @@ struct AppState {
     last_image_hash: Mutex<Option<u64>>,
     hotkey: Mutex<HotkeyConfig>,
     settings: Mutex<AppSettings>,
+    // Wurden die gespeicherten Settings schon einmal von der Platte in `settings`
+    // geladen? Tauri-2-Commands laufen auf einem eigenen Thread und koennen feuern,
+    // bevor setup() das erledigt hat — dann darf get_settings nicht den Default
+    // zurueckgeben, sondern laedt selbst einmal nach (siehe get_settings).
+    settings_loaded: AtomicBool,
 }
 
 #[derive(Debug, Clone)]
@@ -250,7 +277,23 @@ fn hotkey_config_path(app: &tauri::AppHandle) -> Option<PathBuf> {
 }
 
 #[tauri::command]
-fn get_settings(state: tauri::State<AppState>) -> Result<AppSettings, String> {
+fn get_settings(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<AppSettings, String> {
+    // Bug-Fix (erster Start zeigte hellen Modus + "SSH nicht konfiguriert", bis man
+    // die Settings einmal oeffnete): Tauri-2-Commands laufen auf einem eigenen Thread
+    // und koennen feuern, BEVOR setup() die settings.json in den State geschrieben
+    // hat. Dann kam hier faelschlich der Default zurueck. Deshalb garantiert einmal
+    // von der Platte nachladen, falls setup() noch nicht so weit ist.
+    if !state.settings_loaded.load(Ordering::Acquire) {
+        if let Some(loaded) = load_settings(&app) {
+            if let Ok(mut current) = state.settings.lock() {
+                *current = loaded;
+            }
+        }
+        state.settings_loaded.store(true, Ordering::Release);
+    }
     state
         .settings
         .lock()
@@ -266,6 +309,7 @@ fn set_settings(
     app: tauri::AppHandle,
     state: tauri::State<AppState>,
     thumbnail_dismiss: Option<String>,
+    thumbnail_scale: Option<u32>,
     selection_color: Option<String>,
     ssh_host: Option<String>,
     ssh_remote_dir: Option<String>,
@@ -287,6 +331,10 @@ fn set_settings(
             return Err(format!("Invalid thumbnail mode: {dismiss}"));
         }
         settings.thumbnail_dismiss = dismiss;
+    }
+
+    if let Some(scale) = thumbnail_scale {
+        settings.thumbnail_scale = clamp_thumbnail_scale(scale);
     }
 
     if let Some(color) = selection_color {
@@ -1067,27 +1115,57 @@ fn save_annotated(
 }
 
 fn show_thumbnail(app: &tauri::AppHandle, shot: &Shot) -> Result<(), String> {
-    let desktop = virtual_desktop();
     let thumbnail = app
         .get_webview_window("thumbnail")
         .ok_or_else(|| "Thumbnail window not found.".to_string())?;
 
-    let max_width = 500.0;
-    let max_height = 360.0;
-    let scale = (max_width / shot.width as f64)
+    // Vom Nutzer gewaehlte Thumbnail-Groesse (Prozent, Default 100).
+    let scale_pct = app
+        .state::<AppState>()
+        .settings
+        .lock()
+        .map(|s| clamp_thumbnail_scale(s.thumbnail_scale))
+        .unwrap_or(60) as f64
+        / 100.0;
+
+    // DPI-Skalierung des Primaermonitors. Wir rechnen die Fenstergroesse bewusst in
+    // LOGISCHEN Pixeln (passend zum CSS: 100vw/100vh + feste 22px-Buttons) und wandeln
+    // erst zum Schluss in physische Pixel um. Frueher wurde direkt in physischen Pixeln
+    // dimensioniert — auf 125/150%-Displays wurde das Thumbnail dadurch falsch gross
+    // und die Buttons wirkten viel zu gross.
+    let scale_factor = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|monitor| monitor.scale_factor())
+        .unwrap_or(1.0);
+
+    // Maximalgroesse in logischen Pixeln, mit dem Nutzer-Prozentsatz skaliert.
+    let max_width = 500.0 * scale_pct;
+    let max_height = 360.0 * scale_pct;
+    let fit = (max_width / shot.width as f64)
         .min(max_height / shot.height as f64)
         .min(1.0);
-    let width = ((shot.width as f64 * scale).round() as i32).max(150);
-    let height = ((shot.height as f64 * scale).round() as i32).max(110);
+    let width_logical = (shot.width as f64 * fit).max(150.0 * scale_pct);
+    let height_logical = (shot.height as f64 * fit).max(110.0 * scale_pct);
+
+    let width_phys = ((width_logical * scale_factor).round() as i32).max(1);
+    let height_phys = ((height_logical * scale_factor).round() as i32).max(1);
+
     thumbnail
-        .set_size(tauri::PhysicalSize::new(width as u32, height as u32))
+        .set_size(tauri::PhysicalSize::new(width_phys as u32, height_phys as u32))
         .map_err(|error| error.to_string())?;
+
+    // Unten links in der ARBEITSFLAECHE (ohne Taskleiste) verankern, sonst rutscht das
+    // Thumbnail halb hinter die Taskleiste — genau der gemeldete "unten abgeschnitten"-Bug.
+    let work = primary_work_area();
+    let margin = (24.0 * scale_factor).round() as i32;
+    let x = work.x + margin;
+    let y = work.y + work.height - height_phys - margin;
     thumbnail
-        .set_position(tauri::PhysicalPosition::new(
-            desktop.x + 28,
-            desktop.y + desktop.height - height - 38,
-        ))
+        .set_position(tauri::PhysicalPosition::new(x, y))
         .map_err(|error| error.to_string())?;
+
     thumbnail
         .emit("thumbnail-shot", shot.clone())
         .map_err(|error| error.to_string())?;
@@ -1324,6 +1402,44 @@ fn virtual_desktop() -> VirtualDesktop {
         width: 1280,
         height: 720,
     }
+}
+
+// Arbeitsflaeche des Primaermonitors (physische Pixel, OHNE Taskleiste). Wird zum
+// Positionieren des Eck-Thumbnails genutzt, damit es nicht halb hinter der Taskleiste
+// verschwindet. Faellt auf den vollen virtuellen Desktop zurueck, wenn die Abfrage
+// fehlschlaegt.
+#[cfg(windows)]
+fn primary_work_area() -> VirtualDesktop {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SystemParametersInfoW, SPI_GETWORKAREA, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+    };
+
+    let mut rect = RECT::default();
+    let ok = unsafe {
+        SystemParametersInfoW(
+            SPI_GETWORKAREA,
+            0,
+            Some(&mut rect as *mut RECT as *mut core::ffi::c_void),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    };
+
+    if ok.is_ok() && rect.right > rect.left && rect.bottom > rect.top {
+        VirtualDesktop {
+            x: rect.left,
+            y: rect.top,
+            width: rect.right - rect.left,
+            height: rect.bottom - rect.top,
+        }
+    } else {
+        virtual_desktop()
+    }
+}
+
+#[cfg(not(windows))]
+fn primary_work_area() -> VirtualDesktop {
+    virtual_desktop()
 }
 
 #[cfg(windows)]
@@ -2574,6 +2690,7 @@ pub fn run() {
             last_image_hash: Mutex::new(None),
             hotkey: Mutex::new(HotkeyConfig::default()),
             settings: Mutex::new(AppSettings::default()),
+            settings_loaded: AtomicBool::new(false),
         })
         .setup(|app| {
             let handle = app.handle().clone();
@@ -2610,6 +2727,12 @@ pub fn run() {
             if let Ok(mut current) = handle.state::<AppState>().settings.lock() {
                 *current = settings;
             }
+            // Ab hier stehen die echten Settings im State — get_settings muss nicht
+            // mehr selbst von der Platte nachladen.
+            handle
+                .state::<AppState>()
+                .settings_loaded
+                .store(true, Ordering::Release);
 
             let hook_result = start_hotkey_hook();
             let tooltip = match hook_result {

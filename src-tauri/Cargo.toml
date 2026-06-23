@@ -1,6 +1,6 @@
 [package]
 name = "snipdrop"
-version = "0.1.2"
+version = "0.1.3"
 description = "Windows-first screenshot capture and drag utility"
 authors = ["Remo"]
 edition = "2021"

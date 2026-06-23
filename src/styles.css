@@ -339,6 +339,7 @@ button {
 }
 
 .icon-button {
+  position: relative;
   display: grid;
   place-items: center;
   width: 38px;
@@ -350,6 +351,32 @@ button {
   border: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: background 140ms ease, transform 140ms ease, color 140ms ease;
+}
+
+/* Update-Badge: blauer Punkt oben rechts am Zahnrad, wenn eine neue Version bereitliegt. */
+.update-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 2px solid #f1efea;
+  pointer-events: none;
+}
+
+.icon-button:hover .update-badge {
+  border-color: #e7e4dd;
+}
+
+[data-theme="dark"] .update-badge {
+  background: #6b70f5;
+  border-color: #26282b;
+}
+
+[data-theme="dark"] .icon-button:hover .update-badge {
+  border-color: #303236;
 }
 
 .icon-button:hover {
@@ -804,6 +831,73 @@ button {
   border-radius: 5px;
   background: rgba(20, 20, 20, 0.06);
   font-size: 0.92em;
+}
+
+/* Thumbnail-Groessen-Slider */
+.settings-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.settings-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 999px;
+  background: rgba(20, 20, 20, 0.12);
+  outline: none;
+  cursor: pointer;
+}
+
+.settings-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(13, 20, 31, 0.25);
+  cursor: pointer;
+}
+
+.settings-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(13, 20, 31, 0.25);
+  cursor: pointer;
+}
+
+.settings-slider-value {
+  min-width: 44px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #1a1a1a;
+}
+
+[data-theme="dark"] .settings-slider {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+[data-theme="dark"] .settings-slider::-webkit-slider-thumb {
+  background: #6b70f5;
+  border-color: #1c1f26;
+}
+
+[data-theme="dark"] .settings-slider::-moz-range-thumb {
+  background: #6b70f5;
+  border-color: #1c1f26;
+}
+
+[data-theme="dark"] .settings-slider-value {
+  color: #f4f3ef;
 }
 
 .settings-field {

@@ -82,6 +82,7 @@ type ThumbnailDismiss = "timeout" | "paste" | "never";
 
 type AppSettings = {
   thumbnailDismiss: ThumbnailDismiss;
+  thumbnailScale: number;
   selectionColor: string;
   sshHost: string;
   sshRemoteDir: string;
@@ -108,6 +109,12 @@ function reachedMilestone(count: number): number | null {
 
 // Auto-Ausblenden im "timeout"-Modus.
 const THUMBNAIL_TIMEOUT_MS = 3000;
+
+// Erlaubter Bereich fuer die Thumbnail-Groesse in Prozent (muss zum Rust-Backend passen).
+const THUMB_SCALE_MIN = 50;
+const THUMB_SCALE_MAX = 200;
+const clampThumbScale = (value: number) =>
+  Math.min(THUMB_SCALE_MAX, Math.max(THUMB_SCALE_MIN, Math.round(value)));
 
 // Feedback-Versand läuft über Web3Forms (kein eigenes Backend nötig). Der Access-Key
 // ist bei Web3Forms bewusst client-seitig/öffentlich (er routet nur an die Mailbox,
@@ -290,6 +297,9 @@ function MainWindow() {
   });
   // Ist ein SSH-Ziel konfiguriert? Steuert, ob der "Per SSH senden"-Button aktiv ist.
   const [sshConfigured, setSshConfigured] = useState(false);
+  // Liegt ein Update bereit? Zeigt einen blauen Punkt am Zahnrad (Settings), damit
+  // man neue Versionen sieht, ohne die Einstellungen zu oeffnen.
+  const [updateReady, setUpdateReady] = useState(false);
   // Kurzlebige Statusmeldung fuer den SSH-Versand (Erfolg/Fehler).
   const [toast, setToast] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const toastTimer = useRef<number | null>(null);
@@ -385,6 +395,22 @@ function MainWindow() {
       }
     };
   }, [showToast, t]);
+
+  // Beim Start einmal still nach Updates suchen, nur um das Badge am Zahnrad zu
+  // steuern. Im Dev-Modus wirft der Updater (kein Release-Endpoint) — dann faengt
+  // der .catch das ab und das Badge bleibt aus. Der eigentliche Update-Flow
+  // (Notes, Download, Install) lebt unveraendert in den Einstellungen.
+  useEffect(() => {
+    let cancelled = false;
+    void checkUpdate()
+      .then((found) => {
+        if (!cancelled && found) setUpdateReady(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Support-Popup ausloesen, sobald ein neuer Meilenstein erreicht ist. Den
   // Meilenstein sofort als "gezeigt" persistieren, damit es nie zweimal nervt —
@@ -489,11 +515,16 @@ function MainWindow() {
               <button
                 type="button"
                 className="icon-button"
-                aria-label={t("common.settings")}
-                title={t("common.settings")}
+                aria-label={
+                  updateReady
+                    ? `${t("common.settings")} — ${t("update.badgeTitle")}`
+                    : t("common.settings")
+                }
+                title={updateReady ? t("update.badgeTitle") : t("common.settings")}
                 onClick={() => setView("settings")}
               >
                 <Settings size={18} strokeWidth={1.7} aria-hidden="true" />
+                {updateReady ? <span className="update-badge" aria-hidden="true" /> : null}
               </button>
             </div>
           </header>
@@ -1000,6 +1031,7 @@ function SettingsView({ onBack }: { onBack: () => void }) {
     "general" | "thumbnail" | "design" | "ssh" | "feedback"
   >("general");
   const [dismiss, setDismiss] = useState<ThumbnailDismiss>("paste");
+  const [thumbScale, setThumbScale] = useState(60);
   const [selectionColor, setSelectionColor] = useState("#ffffff");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [version, setVersion] = useState("");
@@ -1029,6 +1061,7 @@ function SettingsView({ onBack }: { onBack: () => void }) {
     void invoke<AppSettings>("get_settings")
       .then((settings) => {
         setDismiss(settings.thumbnailDismiss);
+        setThumbScale(clampThumbScale(settings.thumbnailScale ?? 60));
         if (settings.selectionColor) setSelectionColor(settings.selectionColor);
         setSshHost(settings.sshHost ?? "");
         if (settings.sshRemoteDir) setSshRemoteDir(settings.sshRemoteDir);
@@ -1073,6 +1106,14 @@ function SettingsView({ onBack }: { onBack: () => void }) {
   const chooseDismiss = useCallback((value: ThumbnailDismiss) => {
     setDismiss(value);
     void invoke("set_settings", { thumbnailDismiss: value }).catch(() => {});
+  }, []);
+
+  // Thumbnail-Groesse: lokal sofort spiegeln (fluessiger Slider), Backend bekommt den
+  // geclampten Endwert. Wirkt beim naechsten Snip.
+  const chooseThumbScale = useCallback((value: number) => {
+    const next = clampThumbScale(value);
+    setThumbScale(next);
+    void invoke("set_settings", { thumbnailScale: next }).catch(() => {});
   }, []);
 
   const chooseColor = useCallback((value: string) => {
@@ -1553,6 +1594,26 @@ function SettingsView({ onBack }: { onBack: () => void }) {
                     </span>
                   </button>
                 ))}
+              </div>
+
+              <div className="settings-group">
+                <div className="settings-group-head">
+                  <span className="settings-group-title">{t("settings.thumbSizeTitle")}</span>
+                  <InfoTip>{t("settings.thumbSizeInfo")}</InfoTip>
+                </div>
+                <div className="settings-slider-row">
+                  <input
+                    type="range"
+                    className="settings-slider"
+                    min={THUMB_SCALE_MIN}
+                    max={THUMB_SCALE_MAX}
+                    step={5}
+                    value={thumbScale}
+                    aria-label={t("settings.thumbSizeTitle")}
+                    onChange={(event) => chooseThumbScale(Number(event.target.value))}
+                  />
+                  <span className="settings-slider-value">{thumbScale}%</span>
+                </div>
               </div>
             </div>
           )}

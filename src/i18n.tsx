@@ -120,6 +120,8 @@ const en = {
   // Settings — thumbnail
   "settings.thumbTitle": "Thumbnail at the bottom left",
   "settings.thumbInfo": "When the small preview disappears after a snip.",
+  "settings.thumbSizeTitle": "Thumbnail size",
+  "settings.thumbSizeInfo": "How large the corner preview appears (100% = default). Applies to the next snip.",
 
   // Settings — design
   "settings.darkMode": "Dark theme",
@@ -180,6 +182,7 @@ const en = {
   "settings.updateInstall": "Install now",
   "settings.updateDownloading": "Downloading… {percent}%",
   "settings.updateInstalling": "Installing…",
+  "update.badgeTitle": "Update available",
   "settings.updateRestartHint": "SnipDrop restarts when it's done.",
   "settings.updateError": "Update check failed: {error}",
 
@@ -321,6 +324,8 @@ const de: Record<TranslationKey, string> = {
 
   "settings.thumbTitle": "Thumbnail unten links",
   "settings.thumbInfo": "Wann das kleine Vorschaubild nach einem Snip verschwindet.",
+  "settings.thumbSizeTitle": "Thumbnail-Größe",
+  "settings.thumbSizeInfo": "Wie groß das Eck-Vorschaubild erscheint (100% = Standard). Gilt ab dem nächsten Snip.",
 
   "settings.darkMode": "Dunkles Design",
   "settings.darkModeInfo": "Dunkles Farbschema für Galerie und Einstellungen.",
@@ -379,6 +384,7 @@ const de: Record<TranslationKey, string> = {
   "settings.updateInstalling": "Installiere…",
   "settings.updateRestartHint": "SnipDrop startet danach neu.",
   "settings.updateError": "Update-Suche fehlgeschlagen: {error}",
+  "update.badgeTitle": "Update verfügbar",
 
   "dock.editHint": "Klicken zum Bearbeiten · Ziehen für Drag & Drop",
   "dock.close": "Thumbnail schließen",
